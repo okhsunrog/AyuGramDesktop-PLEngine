@@ -5,77 +5,106 @@ Follows GNU GPL v3 and Telegram Desktop licensing.
 */
 
 #pragma once
-#include <stdlib.h>
+
+#include <QByteArray>
+#include <QSettings>
+#include <QtGlobal>
+
 #include <string>
-#include <iostream>
-class PLESettings
-{
-	private:
-		bool _consoleEnabled = isEnvSet("AYUPL_CONSOLE");
-		bool _apiEnabled = isEnvSet("AYUPL_PORT");
-		bool _apiSecEnabled = isEnvSet("AYUPL_DISABLESECURITYFEATURES");
-		inline static PLESettings* instancePtr = nullptr;
 
-		PLESettings() {
-			_consoleEnabled = isEnvSet("AYUPL_CONSOLE");
-			_apiEnabled = isEnvSet("AYUPL_PORT");
-			_apiSecEnabled = isEnvSet("AYUPL_DISABLESECURITYFEATURES");
-		}
-	public:
-		PLESettings(const PLESettings& obj) = delete;
-		static PLESettings* getInstance() {
-			if (instancePtr == nullptr) {
-				instancePtr = new PLESettings();
-			}
-			return instancePtr;
-		}
+class PLESettings {
+public:
+	PLESettings(const PLESettings &obj) = delete;
 
-		static bool isEnvSet(std::string name) {
-			return getenv(name.c_str()) != nullptr && std::string(getenv(name.c_str())) != "" && std::string(getenv(name.c_str())) != "0";
+	static PLESettings *GetInstance() {
+		if (Instance == nullptr) {
+			Instance = new PLESettings();
 		}
+		return Instance;
+	}
 
-		inline bool consoleEnabled() {
-			return _consoleEnabled;
-		}
-		inline void setConsoleEnabled(bool val) {
-			_consoleEnabled = val;
-			val ? writeRegistryEnv("AYUPL_CONSOLE", "1") : writeRegistryEnv("AYUPL_CONSOLE", "");
-		}
-		inline bool apiEnabled() {
-			return _apiEnabled;
-		}
-		inline void setapiEnabled(bool val) {
-			_apiEnabled = val;
-			if (val) {
-				writeRegistryEnv("AYUPL_PORT", "8081");
-				writeRegistryEnv("AYUPL_HOST", "127.0.0.1");
-			}
-			else {
-				writeRegistryEnv("AYUPL_PORT", "");
-				writeRegistryEnv("AYUPL_HOST", "");
-			}
-		}
-		inline bool apiSecEnabled() {
-			return _apiSecEnabled;
-		}
-		inline void setapiSecEnabled(bool val) {
-			_apiSecEnabled = val;
-			val ? writeRegistryEnv("AYUPL_DISABLESECURITYFEATURES", "1") : writeRegistryEnv("AYUPL_DISABLESECURITYFEATURES", "");
-		}
+	bool consoleEnabled() {
+		return _consoleEnabled;
+	}
 
-		static inline void writeRegistryEnv(std::string name, std::string value) { 
-			std::thread t([name, value] {
-				// this is a shady workaround for what we're doing, but i'm slim shady, all you other slim shadys are just imitating
-				if (value == "") {
-					system(("setx " + name + " 0").c_str()); // apply rn
-					system(("REG DELETE \"HKCU\\Environment\" /V \"" + name + "\" /F").c_str());
-					return;
-				}
-				system(("setx \"" + name + "\"	" + value).c_str()); // apply rn
-				std::cout << "Saved setting " << name << " with value " << value << std::endl;
-			});
-			t.detach();
-			
+	void setConsoleEnabled(bool value) {
+		_consoleEnabled = value;
+		value
+			? WriteEnvironment("AYUPL_CONSOLE", "1")
+			: WriteEnvironment("AYUPL_CONSOLE", "");
+	}
+
+	bool apiEnabled() {
+		return _apiEnabled;
+	}
+
+	void setApiEnabled(bool value) {
+		_apiEnabled = value;
+		if (value) {
+			WriteEnvironment("AYUPL_PORT", "8081");
+			WriteEnvironment("AYUPL_HOST", "127.0.0.1");
+		} else {
+			WriteEnvironment("AYUPL_PORT", "");
+			WriteEnvironment("AYUPL_HOST", "");
 		}
+	}
+
+	bool apiSecurityDisabled() {
+		return _apiSecurityDisabled;
+	}
+
+	void setApiSecurityDisabled(bool value) {
+		_apiSecurityDisabled = value;
+		value
+			? WriteEnvironment("AYUPL_DISABLESECURITYFEATURES", "1")
+			: WriteEnvironment("AYUPL_DISABLESECURITYFEATURES", "");
+	}
+
+private:
+	PLESettings() {
+		RestoreEnvironment("AYUPL_CONSOLE");
+		RestoreEnvironment("AYUPL_HOST");
+		RestoreEnvironment("AYUPL_PORT");
+		RestoreEnvironment("AYUPL_DISABLESECURITYFEATURES");
+		_consoleEnabled = IsEnvSet("AYUPL_CONSOLE");
+		_apiEnabled = IsEnvSet("AYUPL_PORT");
+		_apiSecurityDisabled = IsEnvSet("AYUPL_DISABLESECURITYFEATURES");
+	}
+
+	static bool IsEnvSet(const std::string &name) {
+		const auto value = qgetenv(name.c_str());
+		return !value.isEmpty() && value != "0";
+	}
+
+	static void WriteEnvironment(
+			const std::string &name,
+			const std::string &value) {
+		auto settings = QSettings("AyuGram", "PLEngine");
+		if (value.empty()) {
+			qunsetenv(name.c_str());
+			settings.remove(QString::fromStdString(name));
+		} else {
+			qputenv(name.c_str(), QByteArray::fromStdString(value));
+			settings.setValue(
+				QString::fromStdString(name),
+				QString::fromStdString(value));
+		}
+	}
+
+	static void RestoreEnvironment(const char *name) {
+		if (qEnvironmentVariableIsSet(name)) {
+			return;
+		}
+		const auto settings = QSettings("AyuGram", "PLEngine");
+		const auto value = settings.value(QString::fromLatin1(name)).toString();
+		if (!value.isEmpty()) {
+			qputenv(name, value.toUtf8());
+		}
+	}
+
+	bool _consoleEnabled = false;
+	bool _apiEnabled = false;
+	bool _apiSecurityDisabled = false;
+	inline static PLESettings *Instance = nullptr;
+
 };
-

@@ -32,39 +32,36 @@ namespace {
 
 void BuildCategories(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	builder.addSkip();
+	const auto scopes = TrustedUserAgents();
 	std::vector<std::string> userAgents;
 
-	for (size_t i = 0; i < trusted.runtime.size(); i++) {
-		auto x = trusted.runtime.at(i);
+	for (const auto &x : scopes.runtime) {
 		if (std::find(userAgents.begin(), userAgents.end(), x) == userAgents.end()) {
 			userAgents.push_back(x);
 		}
 	}
 
-	for (size_t i = 0; i < trusted.session.size(); i++) {
-		auto x = trusted.session.at(i);
+	for (const auto &x : scopes.session) {
 		if (std::find(userAgents.begin(), userAgents.end(), x) == userAgents.end()) {
 			userAgents.push_back(x);
 		}
 	}
 
-	for (size_t i = 0; i < trusted.events.size(); i++) {
-		auto x = trusted.events.at(i);
+	for (const auto &x : scopes.events) {
 		if (std::find(userAgents.begin(), userAgents.end(), x) == userAgents.end()) {
 			userAgents.push_back(x);
 		}
 	}
 
-	for (size_t i = 0; i < userAgents.size(); i++) {
-		auto x = userAgents.at(i);
+	for (const auto &x : userAgents) {
 		std::string scope = "";
-		if (std::find(trusted.runtime.begin(), trusted.runtime.end(), x) != trusted.runtime.end()) {
+		if (std::find(scopes.runtime.begin(), scopes.runtime.end(), x) != scopes.runtime.end()) {
 			scope += " +RCE";
 		}
-		if (std::find(trusted.session.begin(), trusted.session.end(), x) != trusted.session.end()) {
+		if (std::find(scopes.session.begin(), scopes.session.end(), x) != scopes.session.end()) {
 			scope += " +TDATA";
 		}
-		if (std::find(trusted.events.begin(), trusted.events.end(), x) != trusted.events.end()) {
+		if (std::find(scopes.events.begin(), scopes.events.end(), x) != scopes.events.end()) {
 			scope += " +UPD";
 		}
 		auto rs = QString::fromStdString(x);

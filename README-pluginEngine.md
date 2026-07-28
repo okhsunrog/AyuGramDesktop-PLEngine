@@ -6,10 +6,28 @@ A sample plugin can be found here - https://github.com/MrCheatEugene/AyuSamplePl
 You need to change the project file to have Ayugram source folders defined accordingly. <br>
 For proper development of the plugins, you also need to build this version of Ayugram locally.<br>
 
+## Linux
+
+PLEngine loads native shared libraries on Linux. Build the plugin as a `.so`
+with `-fPIC` using the same compiler ABI and AyuGram headers as the installed
+client. A Windows `.dll` cannot be loaded on Linux.
+
+`EXTERN_DLL_EXPORT` exports the plugin entry points on both Windows and Linux.
+The client exports its PLEngine and AyuGram symbols for plugins at link time.
+Place Linux plugins in:
+
+```text
+~/.local/share/AyuGramDesktop/plugins
+```
+
+The path follows `XDG_DATA_HOME`, so it may differ when that environment
+variable is overridden. The **Plugins folder** button in PLEngine settings opens
+the effective location.
+
 ## How it works?
 It works really simple. 
-- We have a DLL, that defines certain functions and exports them
-- We load that DLL in a separate thread, and run everything in a separate thread
+- We have a dynamic library, that defines certain functions and exports them
+- We load that library in a separate thread, and run everything in a separate thread
 - We execute those functions, in runtime. While Plugin still has some access to internal functions, and API's.
 
 ## How a plugin works?
@@ -370,5 +388,4 @@ void to_json(json &j, const SimplifiedTGAccount &p) {
 	};
 }
 ```
-
 

@@ -6,14 +6,15 @@ AyuGram Plugin engine, 2026 // t.me/ayuplugg
 Follows GNU GPL v3 and Telegram Desktop licensing.
 */
 
-#include <vector>
-#include <AyuPlugin.h>
+#include "AyuPlugin.h"
 
-struct TrustedUAs
-{
+#include <mutex>
+#include <vector>
+
+struct TrustedUAs {
 	std::vector<std::string> runtime;
 	std::vector<std::string> session;
-	std::vector<std::string> events; // todo
+	std::vector<std::string> events;
 };
 
 struct PluginData {
@@ -25,10 +26,42 @@ struct PluginData {
 	InternalDrawGUI drawGUI = nullptr;
 };
 
-inline extern std::vector<InternalDoFilterHistoryItem> FunctionsOnFilter{};
-inline extern std::vector<InternalDoPreProcessMessage> FunctionsOnPrepare{};
-inline extern std::vector<InternalIsOnline> FunctionsOnIsOnline{};
-inline extern std::vector<InternalExcludeDeletion> FunctionsExcludeDeleted{};
-inline extern std::vector<InternalDrawGUI> FunctionsDrawGUI{};
-inline extern std::vector<PluginData> pluginsData{};
-inline extern TrustedUAs trusted{};
+inline std::vector<InternalDoFilterHistoryItem> FunctionsOnFilter;
+inline std::vector<InternalDoPreProcessMessage> FunctionsOnPrepare;
+inline std::vector<InternalIsOnline> FunctionsOnIsOnline;
+inline std::vector<InternalExcludeDeletion> FunctionsExcludeDeleted;
+inline std::vector<InternalDrawGUI> FunctionsDrawGUI;
+inline std::vector<PluginData> pluginsData;
+inline TrustedUAs trusted;
+inline std::mutex FunctionsMutex;
+inline std::mutex TrustedMutex;
+
+inline std::vector<InternalDoFilterHistoryItem> FilterFunctions() {
+	const auto lock = std::lock_guard(FunctionsMutex);
+	return FunctionsOnFilter;
+}
+
+inline std::vector<InternalDoPreProcessMessage> PrepareFunctions() {
+	const auto lock = std::lock_guard(FunctionsMutex);
+	return FunctionsOnPrepare;
+}
+
+inline std::vector<InternalIsOnline> IsOnlineFunctions() {
+	const auto lock = std::lock_guard(FunctionsMutex);
+	return FunctionsOnIsOnline;
+}
+
+inline std::vector<InternalExcludeDeletion> ExcludeDeletionFunctions() {
+	const auto lock = std::lock_guard(FunctionsMutex);
+	return FunctionsExcludeDeleted;
+}
+
+inline std::vector<PluginData> PluginsData() {
+	const auto lock = std::lock_guard(FunctionsMutex);
+	return pluginsData;
+}
+
+inline TrustedUAs TrustedUserAgents() {
+	const auto lock = std::lock_guard(TrustedMutex);
+	return trusted;
+}

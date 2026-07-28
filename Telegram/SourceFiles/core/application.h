@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
+#include "plengine/platform_compat.h"
 
 #include "base/timer.h"
 #include "mtproto/mtproto_auth_key.h"

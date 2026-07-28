@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
+#include "plengine/platform_compat.h"
 
 #include "data/notify/data_peer_notify_settings.h"
 #include "data/data_types.h"

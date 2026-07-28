@@ -130,11 +130,11 @@ bool filtered(const not_null<HistoryItem*> item) {
 	Follows GNU GPL v3 and Telegram Desktop licensing.
 	*/
 
-	for (size_t i = 0; i < FunctionsOnFilter.size(); i++) {
-		auto FoF = FunctionsOnFilter.at(i)(item);
-		if (FoF == FilteredState::Filtered) {
+	for (const auto function : FilterFunctions()) {
+		const auto result = function(item);
+		if (result == FilteredState::Filtered) {
 			return true;
-		} else if (FoF == FilteredState::RejectFurtherFiltering) {
+		} else if (result == FilteredState::RejectFurtherFiltering) {
 			return false;
 		}
 	}

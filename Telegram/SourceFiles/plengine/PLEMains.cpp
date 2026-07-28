@@ -8,9 +8,11 @@ Follows GNU GPL v3 and Telegram Desktop licensing.
 #include <core/application.h>
 #include "apiwrap.h"
 #include <base/unixtime.h>
+#ifdef _WIN32
 #include <Shlwapi.h>
 #include "shellapi.h"
 #undef small // since Small is used by data_session in TGAPI, and it's conflicting with shellapi
+#endif
 #include "MainQueue.h"
 #include <ayu/utils/telegram_helpers.h>
 #include "main/main_session.h"
@@ -25,10 +27,100 @@ Follows GNU GPL v3 and Telegram Desktop licensing.
 #include "data/data_session.h"
 #include "window/window_controller.h"
 #include "window/window_session_controller.h"
+#include "plengine/PLESettings.h"
+
+#include <QCoreApplication>
+#include <QDesktopServices>
+#include <QDir>
+#include <QFileInfo>
+#include <QLibrary>
+#include <QMessageBox>
+#include <QMetaObject>
+#include <QStandardPaths>
+#include <QThread>
+#include <QUrl>
+
+#include <atomic>
+#include <chrono>
+#include <cwchar>
+#include <memory>
 
 using json = nlohmann::json;
 using namespace ns;
 std::condition_variable cv;
+std::vector<std::unique_ptr<QLibrary>> loadedLibraries;
+std::mutex loadedLibrariesMutex;
+
+namespace {
+
+void SleepFor(int milliseconds) {
+	std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
+}
+
+void ShowPluginError(const QString &title, const QString &message) {
+	qWarning().noquote() << title << ':' << message;
+	const auto application = QCoreApplication::instance();
+	if (!application) {
+		return;
+	}
+	const auto show = [=] {
+		QMessageBox::critical(nullptr, title, message);
+	};
+	if (QThread::currentThread() == application->thread()) {
+		show();
+	} else {
+		QMetaObject::invokeMethod(application, show, Qt::QueuedConnection);
+	}
+}
+
+bool ConfirmTrust(const QString &message) {
+	const auto application = QCoreApplication::instance();
+	if (!application) {
+		return false;
+	}
+	auto accepted = false;
+	const auto show = [&] {
+		accepted = QMessageBox::question(
+			nullptr,
+			u"Security warning"_q,
+			message,
+			QMessageBox::Ok | QMessageBox::Cancel,
+			QMessageBox::Cancel) == QMessageBox::Ok;
+	};
+	if (QThread::currentThread() == application->thread()) {
+		show();
+	} else {
+		QMetaObject::invokeMethod(
+			application,
+			show,
+			Qt::BlockingQueuedConnection);
+	}
+	return accepted;
+}
+
+bool InvokeOnMainThread(const std::function<void()> &callback) {
+	const auto application = QCoreApplication::instance();
+	if (!application) {
+		return false;
+	}
+	if (QThread::currentThread() == application->thread()) {
+		callback();
+		return true;
+	}
+	return QMetaObject::invokeMethod(
+		application,
+		callback,
+		Qt::BlockingQueuedConnection);
+}
+
+std::string WideStringToUtf8(const wchar_t *value, std::size_t capacity) {
+	const auto end = std::find(value, value + capacity, L'\0');
+	return QString::fromWCharArray(value, end - value)
+		.toUtf8()
+		.toStdString();
+}
+
+} // namespace
 
 namespace ns {
 	void to_json(nlohmann::json& j, const ns::DefaultJSONResponse& p) {
@@ -64,7 +156,8 @@ namespace ns {
 }
 
 std::vector<std::string> fileNames = {};
-int pollingRate = 1000; // ms
+std::atomic_int pollingRate = 1000;
+std::atomic_bool memUpdaterStarted = false;
 httplib::Server svr;
 
 ApiWrap* activeAccWrapper;
@@ -96,6 +189,36 @@ std::string to_hex_string(bytes::const_span data) {
 	return oss.str();
 }
 
+std::vector<ns::SimplifiedTGAccount> CollectAccounts() {
+	auto result = std::vector<ns::SimplifiedTGAccount>();
+	for (const auto &[index, account] : Core::App().domain().accounts()) {
+		if (!account->sessionExists()) {
+			continue;
+		}
+		const auto session = &account->session();
+		const auto user = session->user().get();
+		const auto keys = session->mtp().getKeysForWrite();
+		const auto dcId = session->mainDcId();
+		auto authKey = std::string();
+		for (const auto &key : keys) {
+			if (key->dcId() == dcId) {
+				authKey = to_hex_string(key->data());
+				break;
+			}
+		}
+		result.push_back({
+			index,
+			std::move(authKey),
+			dcId,
+			session->userId().bare,
+			user->username().toStdString(),
+			user->firstName.toStdString(),
+			user->lastName.toStdString(),
+		});
+	}
+	return result;
+}
+
 std::string GetTrustedNameByType(TypeTrust t) {
 	return std::string(t == TypeTrust::runtime ? "Remote Code Execution" : t == TypeTrust::session
 		? "Sessions and accounts"
@@ -119,21 +242,27 @@ bool IsTrustedUA(std::string ua, TypeTrust trust) {
 		return true;
 	}
 	auto trustedScope = GetTrustedByType(trust);
-	bool good = std::find(trustedScope->begin(), trustedScope->end(), ua) != trustedScope->end();
+	auto good = false;
+	{
+		const auto lock = std::lock_guard(TrustedMutex);
+		good = std::find(
+			trustedScope->begin(),
+			trustedScope->end(),
+			ua) != trustedScope->end();
+	}
 	if (!good) {
-		wchar_t a[2048];
-		mbstowcs(a,
-			std::string("Some application or plug-in is trying to elevate their permissions. Type of elevation: " +
-				GetTrustedNameByType(trust) +
-				".  Please confirm, or "
-				"decline this request. U/A:" +
-				ua)
-			.c_str(),
-			2048);
-
-		good = IDOK == MessageBox(NULL, a, L"Security warning", MB_OKCANCEL);
+		good = ConfirmTrust(QString::fromStdString(
+			"Some application or plug-in is trying to elevate its permissions.\n\n"
+			"Type of elevation: " + GetTrustedNameByType(trust)
+			+ "\nUser-Agent: " + ua));
 		if (good) {
-			trustedScope->push_back(ua);
+			const auto lock = std::lock_guard(TrustedMutex);
+			if (std::find(
+					trustedScope->begin(),
+					trustedScope->end(),
+					ua) == trustedScope->end()) {
+				trustedScope->push_back(ua);
+			}
 		}
 	}
 
@@ -142,40 +271,65 @@ bool IsTrustedUA(std::string ua, TypeTrust trust) {
 
 void updMemHelp() {
 	while (1) {
-		memHelper.applicationAddr = (uintptr_t)Core::Application::Instance;
-		memHelper.isSharingScreen = Core::App().isSharingScreen();
-		memHelper.addToQueue = &AddToQueue;
-		memHelper.activeUserPtr = Core::App().activeAccount().session().user();
-		mbstowcs(memHelper.currentAccountName, memHelper.activeUserPtr->name().toStdString().c_str(), 255);
-		Sleep(pollingRate);
+		const auto invoked = InvokeOnMainThread([] {
+			memHelper.applicationAddr = uintptr_t(Core::Application::Instance);
+			memHelper.isSharingScreen = Core::App().isSharingScreen();
+			memHelper.addToQueue = &AddToQueue;
+			const auto &account = Core::App().activeAccount();
+			if (!account.sessionExists()) {
+				memHelper.activeUserPtr = nullptr;
+				memHelper.currentAccountName[0] = L'\0';
+				return;
+			}
+			memHelper.activeUserPtr = account.session().user();
+			const auto name = memHelper.activeUserPtr->name().toStdWString();
+			const auto count = std::min(name.size(), std::size_t(254));
+			std::wmemcpy(
+				memHelper.currentAccountName,
+				name.data(),
+				count);
+			memHelper.currentAccountName[count] = L'\0';
+		});
+		if (!invoked) {
+			return;
+		}
+		SleepFor(pollingRate.load());
 	}
 }
 
 void updIsOnline() {
 	while (true) {
-		for (size_t i = 0; i < FunctionsOnIsOnline.size(); i++) {
-			if ((bool)FunctionsOnIsOnline.at(i)() == true) {
-				if (const auto controller = Core::App().activeWindow()->sessionController()) {
+		for (const auto function : IsOnlineFunctions()) {
+			if (function()) {
+				crl::on_main([] {
+					const auto window = Core::App().activeWindow();
+					const auto controller = window
+						? window->sessionController()
+						: nullptr;
+					if (controller) {
 					controller->session()
 						.updates()
 						.api()
 						.request(MTPaccount_UpdateStatus(MTP_bool(false)))
 						.send();
-				}
+					}
+				});
 				break;
 			}
 		}
-		Sleep(2000);
+		SleepFor(2000);
 	}
 }
 
 void openPluginsFolder()
 {
-	std::system(("explorer \""+ getPLFolder()+"\"").c_str());
+	QDesktopServices::openUrl(
+		QUrl::fromLocalFile(QString::fromStdString(getPLFolder())));
 }
 
 void loadMem() {
-	if (memHelper.isEnabled == false) {
+	auto expected = false;
+	if (memUpdaterStarted.compare_exchange_strong(expected, true)) {
 		memHelper.isEnabled = true;
 		std::thread th(updMemHelp);
 		th.detach();
@@ -185,115 +339,150 @@ void loadMem() {
 std::string uintToJSON(uintptr_t addr) {
 	json b;
 	char addrv[128];
-	sprintf(addrv, "%p", addr);
+	snprintf(
+		addrv,
+		sizeof(addrv),
+		"%p",
+		reinterpret_cast<void *>(addr));
 	b["address"] = addrv;
 	return b.dump();
 }
 
 std::string getPLFolder() {
-	char* path = new char[2048];
-	GetCurrentDirectoryA(2048, path);
-	std::string s = path;
-	return s + "\\plugins";
+	auto base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+	if (base.isEmpty()) {
+		base = QDir(
+			QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation))
+			.filePath(u"AyuGram"_q);
+	}
+	return QDir(base).filePath(u"plugins"_q).toStdString();
 }
 
 void processDLL(std::string dll) {
-	char* path = new char[2048];
-	PathCombineA(path, getPLFolder().c_str(), dll.c_str());
-	std::string plFolder = path;
-	wchar_t b[2048];
-	mbstowcs(b, plFolder.c_str(), 2048);
-	HINSTANCE dllInstance =
-		LoadLibrary(b);
-
-	if (dllInstance == NULL) {
-		wchar_t a[512];
-		std::string err = std::string("DLL ") + dll + std::string(" failed to load with code ") + std::to_string(GetLastError());
-		mbstowcs(a, err.c_str(),
-			512);
-		std::cout << ((err + std::string("\n")).c_str());
-		MessageBox(NULL, a, L"Plugin load error", MB_OK);
+	const auto requested = QString::fromStdString(dll);
+	const auto fullPath = QFileInfo(requested).isAbsolute()
+		? QFileInfo(requested).absoluteFilePath()
+		: QDir(QString::fromStdString(getPLFolder())).filePath(requested);
+	auto library = std::make_unique<QLibrary>(fullPath);
+	library->setLoadHints(
+		QLibrary::ResolveAllSymbolsHint | QLibrary::ExportExternalSymbolsHint);
+	if (!library->load()) {
+		ShowPluginError(
+			u"Plugin load error"_q,
+			u"Could not load %1:\n%2"_q.arg(fullPath, library->errorString()));
 		return;
 	}
 
-	AyuPlugin* pl = ((InternalPluginInfo)GetProcAddress(dllInstance, "pluginInfo"))();
-	if (pl == NULL) {
-		wchar_t a[512];
-		std::string err = std::string("DLL ") + dll + std::string(" 's global structure failed to load with code  ") + std::to_string(GetLastError());
-		std::cout << ((err + std::string("\n")).c_str());
-		mbstowcs(
-			a, err.c_str(), 512);
-
-		MessageBox(NULL, a, L"Plugin execution error", MB_OK);
+	const auto pluginInfo = reinterpret_cast<InternalPluginInfo>(
+		library->resolve("pluginInfo"));
+	AyuPlugin* pl = pluginInfo ? pluginInfo() : nullptr;
+	if (!pl) {
+		ShowPluginError(
+			u"Plugin execution error"_q,
+			u"%1 does not export a valid pluginInfo function."_q.arg(fullPath));
 		return;
 	}
 	
-	InternalSetup set_func = (InternalSetup)GetProcAddress(dllInstance, "internalSetup");
-	InternalLoop loop_func = (InternalLoop)GetProcAddress(dllInstance, "internalLoop");
-	InternalDoFilterHistoryItem func = (InternalDoFilterHistoryItem)GetProcAddress(dllInstance, "doFilterHistoryItem");
-	InternalDoPreProcessMessage func2 =
-		(InternalDoPreProcessMessage)GetProcAddress(dllInstance, "doPreProcessMessage");
+	const auto resolve = [&](const char *name) {
+		return library->resolve(name);
+	};
+	auto set_func = reinterpret_cast<InternalSetup>(resolve("internalSetup"));
+	auto loop_func = reinterpret_cast<InternalLoop>(resolve("internalLoop"));
+	auto func = reinterpret_cast<InternalDoFilterHistoryItem>(
+		resolve("doFilterHistoryItem"));
+	auto func2 = reinterpret_cast<InternalDoPreProcessMessage>(
+		resolve("doPreProcessMessage"));
+	auto func4 = reinterpret_cast<InternalIsOnline>(
+		resolve("doReturnIsOnline"));
+	auto func5 = reinterpret_cast<InternalExcludeDeletion>(
+		resolve("doExcludeDeleted"));
+	auto func6 = reinterpret_cast<InternalDrawGUI>(resolve("doDrawGUI"));
 
-	InternalIsOnline func4 = (InternalIsOnline)GetProcAddress(dllInstance, "doReturnIsOnline");
-	InternalExcludeDeletion func5 = (InternalExcludeDeletion)GetProcAddress(dllInstance, "doExcludeDeleted");
-	InternalDrawGUI func6 = (InternalDrawGUI)GetProcAddress(dllInstance, "doDrawGUI");
-
-	PluginData d;
-	char _b[2048];
-	wcstombs(_b, pl->name, 2048);
-	char __b[2048];
-	wcstombs(__b, pl->description, 2048);
-	d.name = _b;
-	d.description = __b;
-	d.usesHooks = func2 != NULL || func != NULL || func4 != NULL|| func5 != NULL;
-	d.modulePath = dll;
+	auto d = PluginData();
+	d.name = WideStringToUtf8(pl->name, std::size(pl->name));
+	d.description = WideStringToUtf8(
+		pl->description,
+		std::size(pl->description));
+	d.usesHooks = func2 || func || func4 || func5;
+	d.modulePath = fullPath.toStdString();
 	d.hooksList = "";
 
-	if (func != NULL) {
-		FunctionsOnFilter.push_back(func);
+	if (func) {
 		d.hooksList += "Shared filters hook (can filter out messages before shared filters) \n";
 		std::cout << ("Got shared filters function handle!\n");
 	}
-	if (func2 != NULL) {
-		FunctionsOnPrepare.push_back(func2);
+	if (func2) {
 		d.hooksList += "Message preparation hook (can intercept your messages, and change them on send time) \n";
 		std::cout << ("Got message preparation function handle!\n");
 	}
-	if (func4 != NULL) {
-		FunctionsOnIsOnline.push_back(func4);
+	if (func4) {
 		d.hooksList += "Online hook (can modify your online state) \n";
 		std::cout << ("Got online function handle!\n");
 	}
-	if (func5 != NULL) {
-		FunctionsExcludeDeleted.push_back(func5);
+	if (func5) {
 		d.hooksList += "Exclude deletion hook (can exclude messages out of \"save deleted\") \n";
 		std::cout << ("Got InternalExcludeDeletion function handle!\n");
 	}
-	if (func6 != NULL) {
-		FunctionsDrawGUI.push_back(func6);
+	if (func6) {
 		d.drawGUI = func6;
 		d.hooksList += "Can draw GUI \n";
-		std::cout << ("Got InternalExcludeDeletion function handle!\n");
+		std::cout << ("Got GUI function handle!\n");
 	}
-	pl->memData.activeUserPtr = (uintptr_t)(UserData*)(Core::App().activeAccount().session().user());
-	pl->memData.activeSessionPtr = (uintptr_t)(&Core::App().activeAccount().session());
-	pl->memData.addToQueue = &AddToQueue;
-	pl->memData.applicationAddr = (uintptr_t)Core::Application::Instance;
+	const auto initialized = InvokeOnMainThread([=] {
+		pl->memData = {};
+		pl->memData.addToQueue = &AddToQueue;
+		pl->memData.applicationAddr = uintptr_t(Core::Application::Instance);
+		const auto &account = Core::App().activeAccount();
+		if (account.sessionExists()) {
+			pl->memData.activeUserPtr = uintptr_t(
+				account.session().user().get());
+			pl->memData.activeSessionPtr = uintptr_t(&account.session());
+		}
+	});
+	if (!initialized) {
+		ShowPluginError(
+			u"Plugin execution error"_q,
+			u"Could not initialize %1 because AyuGram is shutting down."_q
+				.arg(fullPath));
+		return;
+	}
 	std::cout << ("Shared memory pointers successfully!\n");
 
-	if (set_func != NULL) {
+	if (set_func) {
 		d.hooksList += "Has Setup function (will run once on startup) \n";
 	}
-	if (loop_func != NULL) {
+	if (loop_func) {
 		d.hooksList += "Has Loop function (will run in a loop) \n";
 	}
-	pluginsData.push_back(d);
+	{
+		const auto lock = std::lock_guard(FunctionsMutex);
+		if (func) {
+			FunctionsOnFilter.push_back(func);
+		}
+		if (func2) {
+			FunctionsOnPrepare.push_back(func2);
+		}
+		if (func4) {
+			FunctionsOnIsOnline.push_back(func4);
+		}
+		if (func5) {
+			FunctionsExcludeDeleted.push_back(func5);
+		}
+		if (func6) {
+			FunctionsDrawGUI.push_back(func6);
+		}
+		pluginsData.push_back(d);
+	}
+	{
+		const auto lock = std::lock_guard(loadedLibrariesMutex);
+		loadedLibraries.push_back(std::move(library));
+	}
 
-	if(set_func!=NULL){
+	if (set_func) {
 		std::cout << ("Exec-ing setup..\n");
 		set_func();
 	}
-	if (loop_func != NULL) {
+	if (loop_func) {
 		while (true) {
 			loop_func();
 		}
@@ -308,108 +497,104 @@ void listenHTTP() {
 	svr.Get("/api/runtime/setPolling",
 		[](const httplib::Request& req, httplib::Response& res)
 		{
-			std::string ua = getUA(req);
-			std::vector<ns::SimplifiedTGAccount> accs_2;
-			bool good = IsTrustedUA(ua, TypeTrust::runtime);
-			if (good && memHelper.isEnabled) {
-				int r = std::stoi(req.get_param_value("rate"));
-				r = r <= 10 ? 10 : r;
-				pollingRate = r;
+			const auto good = IsTrustedUA(getUA(req), TypeTrust::runtime);
+			const auto updaterRunning = memUpdaterStarted.load();
+			auto parsed = false;
+			const auto rate = req.has_param("rate")
+				? QString::fromStdString(req.get_param_value("rate"))
+					.toInt(&parsed)
+				: 0;
+			if (good && updaterRunning && parsed) {
+				pollingRate.store(std::max(rate, 10));
 			}
+			const auto ok = good && updaterRunning && parsed;
+			const auto error = !good
+				? "User rejected trust elevation request."
+				: !updaterRunning
+				? "Nobody is updating MemHelper."
+				: !parsed
+				? "The rate parameter is missing or invalid."
+				: "";
 			res.set_content(
-				OKResponse(good,
-					good ? (memHelper.isEnabled ? "" : "Nobody's updating MemHelper, though.") : "User rejected trust elevation request.",
-					good ? uintToJSON((uintptr_t)&memHelper) : "null"),
+				OKResponse(
+					ok,
+					error,
+					ok ? uintToJSON(uintptr_t(&memHelper)) : "null"),
 				"application/json");
 		});
 
 	svr.Get("/api/runtime/load",
 		[](const httplib::Request& req, httplib::Response& res)
 		{
-			std::string ua = getUA(req);
-			std::vector<ns::SimplifiedTGAccount> accs_2;
-			bool good = IsTrustedUA(ua, TypeTrust::runtime);
-			if (good) {
+			const auto trusted = IsTrustedUA(getUA(req), TypeTrust::runtime);
+			const auto hasName = req.has_param("name")
+				&& !req.get_param_value("name").empty();
+			if (trusted && hasName) {
 				loadMem();
-				std::string libName = req.get_param_value("name");
-				std::thread t(processDLL, libName);
+				auto t = std::thread(
+					processDLL,
+					req.get_param_value("name"));
 				t.detach();
 			}
-			res.set_content(OKResponse(good,
-				good ? "" : "User rejected trust elevation request.",
-				good ? uintToJSON((uintptr_t)&memHelper) : "null"),
+			const auto ok = trusted && hasName;
+			res.set_content(OKResponse(
+				ok,
+				!trusted
+					? "User rejected trust elevation request."
+					: !hasName
+					? "The name parameter is missing."
+					: "",
+				ok ? uintToJSON(uintptr_t(&memHelper)) : "null"),
 				"application/json");
 		});
 
 	svr.Get("/api/runtime/export",
 		[](const httplib::Request& req, httplib::Response& res)
 		{
-			std::string ua = getUA(req);
-			std::vector<ns::SimplifiedTGAccount> accs_2;
-			bool good = IsTrustedUA(ua, TypeTrust::runtime);
+			const auto good = IsTrustedUA(getUA(req), TypeTrust::runtime);
 			if (good) {
 				loadMem();
 			}
 			res.set_content(OKResponse(good,
 				good ? "" : "User rejected trust elevation request.",
-				good ? uintToJSON((uintptr_t)&memHelper) : "null"),
+				good ? uintToJSON(uintptr_t(&memHelper)) : "null"),
 				"application/json");
 		});
 
 	svr.Get("/api/session/get",
 		[](const httplib::Request& req, httplib::Response& res)
 		{
-			std::string ua = getUA(req);
-			std::vector<ns::SimplifiedTGAccount> accs_2;
-			bool good = IsTrustedUA(ua, TypeTrust::session);
+			auto accounts = std::vector<ns::SimplifiedTGAccount>();
+			auto good = IsTrustedUA(getUA(req), TypeTrust::session);
 			if (good) {
-				for (const auto& [index, account] : Core::App().domain().accounts()) {
-					if (!account->sessionExists()) {
-						continue;
-					}
-					auto session = &account->session();
-					auto userdata = session->user().get();
-					auto keylist = session->mtp().getKeysForWrite();
-					auto dcid = session->mainDcId();
-					std::string hexedKey = "";
-					for (int ii = 0; ii < keylist.size(); ii++) {
-						if (keylist.at(ii)->dcId() == dcid) {
-							hexedKey = to_hex_string(keylist.at(ii)->data());
-						}
-					}
-					ns::SimplifiedTGAccount a{ index,
-											  hexedKey,
-											  dcid,
-											  session->userPeerId().value & UserId::kShift,
-											  userdata->username().toStdString(),
-											  userdata->firstName.toStdString(),
-											  userdata->lastName.toStdString() };
-					accs_2.push_back(a);
-				}
+				good = InvokeOnMainThread([&] {
+					accounts = CollectAccounts();
+				});
 			}
-			json response = accs_2;
+			const auto response = json(accounts);
 			res.set_content(
-				OKResponse(good, good ? "" : "User rejected trust elevation request.", good ? response.dump() : "null"),
+				OKResponse(
+					good,
+					good ? "" : "The request was rejected or AyuGram is shutting down.",
+					good ? response.dump() : "null"),
 				"application/json");
 		});
-	char host[128];
-	GetEnvironmentVariableA("AYUPL_HOST", host, 127);
-	char port[6];
-	GetEnvironmentVariableA("AYUPL_PORT", port, 5);
-	int portx = atoi(port);
+	const auto host = qEnvironmentVariable("AYUPL_HOST", "127.0.0.1");
+	bool parsed = false;
+	const auto portx = qEnvironmentVariableIntValue("AYUPL_PORT", &parsed);
 	bool val = portx >= 1 && portx < 65535;
-	if (!val) {
+	if (!parsed || !val) {
 		std::cout << "Port is not specified, API is disabled\r\n";
 		return;
 	}
-	svr.listen(host, val ? portx : 8080);
+	svr.listen(host.toStdString(), portx);
 }
 
 
 
 void loadKnownPlugins() {
 	std::cout << ("Sleeping for 5 seconds, then loading the plugins..\n\n");
-	Sleep(5000);
+	SleepFor(5000);
 	for (auto b : fileNames) {
 		std::cout << ((std::string("Loading ") + b + std::string("\n")).c_str());
 
@@ -440,6 +625,9 @@ void onMainThread() {
 }
 
 void MainInject() {
+	PLESettings::GetInstance();
+
+#ifdef _WIN32
 	if (getenv("AYUPL_CONSOLE") != nullptr && std::string(getenv("AYUPL_CONSOLE"))=="1") {
 		AllocConsole();
 		SetConsoleTitleA("AyuGram Plugin Engine by Pomorgite");
@@ -464,39 +652,22 @@ void MainInject() {
 		setvbuf(stderr, NULL, _IONBF, 0);
 		setvbuf(stdin, NULL, _IONBF, 0);
 	}
-
+#endif
 
 	std::cout << "Plugin engine is loading.\n\n";
-	wchar_t plFolder[2048];
 	std::string plF = getPLFolder();
 	std::cout << (std::string("Plugin folder: ") + plF + "\n").c_str();
-	mbstowcs(plFolder, plF.c_str(), 2048);
-	wchar_t plFiles[2048];
-	mbstowcs(plFiles, (plF + "\\*").c_str(), 2048);
-	CreateDirectory(plFolder, NULL);
-	WIN32_FIND_DATA ffd;
-	HANDLE hFind = FindFirstFile(plFiles, &ffd);
-	if (hFind != INVALID_HANDLE_VALUE) {
-		do {
-			if (!(ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
-				char DefChar = ' ';
-				char* szTo = new char[2048];
-				WideCharToMultiByte(CP_ACP, 0, ffd.cFileName, -1, szTo, 260, &DefChar, NULL);
-
-				char* path = new char[2048];
-				PathCombineA(path, plF.c_str(), szTo);
-				std::string x = path;
-				fileNames.push_back(x);
-				char to[4096];
-				sprintf(to, "Found plugin: %s \n", szTo);
-				std::cout << (to);
-			}
-		} while (FindNextFile(hFind, &ffd));
-
-		FindClose(hFind);
+	auto pluginDirectory = QDir(QString::fromStdString(plF));
+	if (!pluginDirectory.mkpath(u"."_q)) {
+		std::cout << "Could not create plugins folder.\n";
 	}
-	else {
-		std::cout << ("Plugins folder was not found: Invalid handle\n");
+	const auto entries = pluginDirectory.entryList(QDir::Files | QDir::Readable);
+	for (const auto &entry : entries) {
+		if (!QLibrary::isLibrary(entry)) {
+			continue;
+		}
+		fileNames.push_back(entry.toStdString());
+		std::cout << "Found plugin: " << entry.toStdString() << '\n';
 	}
 	std::thread a2(loadKnownPlugins);
 	a2.detach();

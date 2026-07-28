@@ -99,6 +99,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/features/forward/ayu_forward.h"
 #include "ExternSharedVariables.h"
 
+#include <cstring>
 
 namespace {
 
@@ -4059,16 +4060,17 @@ void ApiWrap::sendMessage(
 		MessageToSend &&message,
 		std::optional<MsgId> localMessageId) {
   
-	printf("got SendMessage!\n");
-	for (auto fun : FunctionsOnPrepare) {
-		printf("Passing message when sending..\n");
+	for (const auto function : PrepareFunctions()) {
 		char out[4097] = {};
 		char in[4097] = {};
-		strcpy(in, message.textWithTags.text.toStdString().c_str());
-		in[4096] = '\0'; 
-		fun(in, out);
-		message.textWithTags.text.replace(0, message.textWithTags.text.length(), out);
-		printf("done.\n");
+		const auto input = message.textWithTags.text.toUtf8();
+		const auto size = std::min(
+			input.size(),
+			qsizetype(sizeof(in) - 1));
+		std::memcpy(in, input.constData(), size);
+		function(in, out);
+		out[sizeof(out) - 1] = '\0';
+		message.textWithTags.text = QString::fromUtf8(out);
 	}
   
 	applyGhostScheduling(_session, message.action.options);

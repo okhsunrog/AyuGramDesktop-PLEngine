@@ -33,7 +33,7 @@ namespace Settings {
 
 using namespace Builder;
 using namespace Settings::AyuBuilder;
-PLESettings* settings = PLESettings::getInstance();
+PLESettings *settings = PLESettings::GetInstance();
 
 namespace {
 
@@ -42,23 +42,24 @@ void BuildCategories(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 	builder.addSkip();
 	ayu.addToggle({
 		.id = u"ple/enableConsole"_q,
-		.title = rpl::single(QString("Enable console(applies at restart)")),
+		.title = rpl::single(QString("Enable console (applies at restart)")),
 		.getter = []() {return settings->consoleEnabled(); },
 		.setter = [](bool val) {settings->setConsoleEnabled(val); }
 		});
 	builder.addSkip();
 	ayu.addToggle({
 		.id = u"ple/apiEnabled"_q,
-		.title = rpl::single(QString("Enable HTTP API (127.0.0.1:8081)")),
+		.title = rpl::single(QString(
+			"Enable HTTP API (127.0.0.1:8081, applies at restart)")),
 		.getter = []() {return settings->apiEnabled(); },
-		.setter = [](bool val) {settings->setapiEnabled(val); }
+		.setter = [](bool val) {settings->setApiEnabled(val); }
 		});
 	builder.addSkip();
 	ayu.addToggle({
 		.id = u"ple/apiSecEnabled"_q,
 		.title = rpl::single(QString("Disable security features in HTTP API")),
-		.getter = []() {return settings->apiSecEnabled(); },
-		.setter = [](bool val) {settings->setapiSecEnabled(val); }
+		.getter = []() {return settings->apiSecurityDisabled(); },
+		.setter = [](bool val) {settings->setApiSecurityDisabled(val); }
 		});
 	builder.addSkip();
 }

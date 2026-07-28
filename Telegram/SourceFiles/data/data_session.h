@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
+#include "plengine/platform_compat.h"
 
 #include "storage/storage_databases.h"
 #include "dialogs/dialogs_main_list.h"

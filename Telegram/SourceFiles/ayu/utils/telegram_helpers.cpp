@@ -702,8 +702,8 @@ bool isMessageSavable(const not_null<HistoryItem*> item) {
 
 void processMessageDelete(not_null<HistoryItem *> item) {
 
-	for (auto fun : FunctionsExcludeDeleted) {
-		if (fun(item)) {
+	for (const auto function : ExcludeDeletionFunctions()) {
+		if (function(item)) {
 			item->destroy();
 			return;
 		}

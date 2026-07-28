@@ -105,6 +105,23 @@ PRIVATE
 )
 
 set(ayugram_files
+        MainQueue.cpp
+        MainQueue.h
+        AyuPlugin.h
+        ExternSharedVariables.h
+        plengine/PLEMains.cpp
+        plengine/PLEMains.h
+        plengine/PLESettings.cpp
+        plengine/PLESettings.h
+        plengine/platform_compat.h
+        plengine/settings/settings_engine.cpp
+        plengine/settings/settings_engine.h
+        plengine/settings/settings_main.cpp
+        plengine/settings/settings_main.h
+        plengine/settings/settings_plugins.cpp
+        plengine/settings/settings_plugins.h
+        plengine/settings/settings_trustedUA.cpp
+        plengine/settings/settings_trustedUA.h
         ayu/ayu_worker.cpp
         ayu/ayu_worker.h
         ayu/ayu_url_handlers.cpp
@@ -2474,6 +2491,10 @@ elseif (build_winstore)
     )
 endif()
 
+if (LINUX)
+    target_link_options(Telegram PRIVATE "-Wl,--export-dynamic")
+endif()
+
 if (LINUX AND DESKTOP_APP_USE_PACKAGED)
     include(GNUInstallDirs)
     configure_file("../lib/xdg/com.ayugram.desktop.service" "${CMAKE_CURRENT_BINARY_DIR}/com.ayugram.desktop.service" @ONLY)
@@ -2501,5 +2522,3 @@ if (LINUX AND DESKTOP_APP_USE_PACKAGED)
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/com.ayugram.desktop.service" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/dbus-1/services")
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/com.ayugram.desktop.metainfo.xml" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/metainfo")
 endif()
-
-set_source_files_properties(MainQueue.cpp PROPERTIES SKIP_PRECOMPILE_HEADERS ON)

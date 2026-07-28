@@ -2529,8 +2529,8 @@ void HistoryItem::clearMediaAsExpired() {
 
 	bool keepRunning = false;
 
-	for (auto fun : FunctionsExcludeDeleted) {
-		if (fun(this)) {
+	for (const auto function : ExcludeDeletionFunctions()) {
+		if (function(this)) {
 			keepRunning = true;
 		}
 	}
@@ -3650,8 +3650,8 @@ void HistoryItem::setDeleted() {
 	AyuGram Plugin engine, 2026 // t.me/ayuplugg
 	Follows GNU GPL v3 and Telegram Desktop licensing.
 	*/
-	for (auto fun : FunctionsExcludeDeleted) {
-		if (fun(this)) {
+	for (const auto function : ExcludeDeletionFunctions()) {
+		if (function(this)) {
 			return;
 		}
 	}

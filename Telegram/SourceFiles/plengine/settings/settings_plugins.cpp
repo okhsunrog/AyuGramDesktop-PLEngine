@@ -59,6 +59,7 @@ void saveLayout(SectionBuilder builder, SectionBuilder sb) {
 
 void BuildCategories(SectionBuilder &builder, AyuSectionBuilder &ayu, PLEPlugins* ple) {
 	builder.addSkip();
+	const auto loadedPlugins = PluginsData();
 	auto breakEveryN = [](const QString& input, int n) {
 		QString result;
 		for (int i = 0; i < input.size(); i += n) {
@@ -68,15 +69,16 @@ void BuildCategories(SectionBuilder &builder, AyuSectionBuilder &ayu, PLEPlugins
 		return result.trimmed();
 		};
 
-	for (size_t i = 0; i < pluginsData.size(); i++) {
-		auto x = pluginsData.at(i);
+	for (const auto &x : loadedPlugins) {
 		builder.addDivider();
 		builder.addButton({
 			.title = rpl::single(breakEveryN(QString::fromStdString(x.name), 32)),
 			.icon = x.usesHooks ? &st::menuIconEdit : &st::menuIconExperimental,
 			.label = rpl::single(QString(x.usesHooks ? "Uses hooks" : "")),
 			.onClick = [=] {
-				auto msg = QString::fromStdString("DLL: " + x.modulePath + "\n\nUses hooks:\n" + x.hooksList);
+				auto msg = QString::fromStdString(
+					"Library: " + x.modulePath
+					+ "\n\nUses hooks:\n" + x.hooksList);
 				if (x.drawGUI != nullptr) {
 					cleanLayout(builder);
 					auto sb = secBuilder(builder);

@@ -1,11 +1,15 @@
 #pragma once
-#include <history\history.h>
+#include <history/history.h>
 #include <ayu/ui/settings/ayu_builder.h>
 #include <settings/settings_builder.h>
 #include <plengine/settings/settings_plugins.h>
 
 #ifdef AYUPLUGIN
+#ifdef _WIN32
 #define EXTERN_DLL_EXPORT extern "C" __declspec(dllexport)
+#else
+#define EXTERN_DLL_EXPORT extern "C" __attribute__((visibility("default")))
+#endif
 #endif
 
 /*

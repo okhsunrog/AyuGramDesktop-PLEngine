@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "channels": [
+    "job_python",
+    "forpython",
+    "django_jobs_board",
+    "backend_job_geeklink",
+    "workayte"
+  ],
+  "history_limit": 100,
+  "poll_interval_seconds": 60,
+  "output_path": ""
+}

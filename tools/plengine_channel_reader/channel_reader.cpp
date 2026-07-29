@@ -75,6 +75,12 @@ struct ResolvedChannel {
   QString title;
 };
 
+struct Link {
+  QString kind;
+  QString url;
+  QString text;
+};
+
 struct Post {
   std::uint64_t channelId = 0;
   QString channelUsername;
@@ -83,6 +89,7 @@ struct Post {
   int postedAt = 0;
   std::optional<int> editedAt;
   QString text;
+  std::vector<Link> links;
 };
 
 auto Plugin = AyuPlugin{
@@ -245,6 +252,100 @@ template <typename Result, typename Done>
 
 void ScheduleNextPoll(int seconds);
 
+void AddLink(std::vector<Link> &links, QString kind, QString url,
+             QString text = QString()) {
+  kind = kind.trimmed();
+  url = url.trimmed();
+  text = text.trimmed();
+  if (kind.isEmpty() || url.isEmpty()) {
+    return;
+  }
+  const auto duplicate = std::ranges::find_if(links, [&](const Link &link) {
+    return link.kind == kind && link.url == url && link.text == text;
+  });
+  if (duplicate == links.end()) {
+    links.push_back({
+        .kind = std::move(kind),
+        .url = std::move(url),
+        .text = std::move(text),
+    });
+  }
+}
+
+void AppendEntityLinks(std::vector<Link> &links, const QString &text,
+                       const QList<MTPMessageEntity> &entities) {
+  for (const auto &entity : entities) {
+    entity.match(
+        [&](const MTPDmessageEntityUrl &data) {
+          const auto visible =
+              text.mid(data.voffset().v, data.vlength().v).trimmed();
+          AddLink(links, u"text_url"_q, visible, visible);
+        },
+        [&](const MTPDmessageEntityTextUrl &data) {
+          AddLink(links, u"hidden_text_url"_q, qs(data.vurl()),
+                  text.mid(data.voffset().v, data.vlength().v));
+        },
+        [&](const MTPDmessageEntityEmail &data) {
+          const auto email =
+              text.mid(data.voffset().v, data.vlength().v).trimmed();
+          AddLink(links, u"email"_q, u"mailto:"_q + email, email);
+        },
+        [&](const auto &) {});
+  }
+}
+
+void AppendButtonLinks(std::vector<Link> &links, const MTPReplyMarkup &markup) {
+  markup.match(
+      [&](const MTPDreplyInlineMarkup &data) {
+        for (const auto &row : data.vrows().v) {
+          for (const auto &button : row.data().vbuttons().v) {
+            button.match(
+                [&](const MTPDkeyboardButtonUrl &fields) {
+                  AddLink(links, u"inline_button"_q, qs(fields.vurl()),
+                          qs(fields.vtext()));
+                },
+                [&](const MTPDkeyboardButtonUrlAuth &fields) {
+                  AddLink(links, u"inline_auth_button"_q, qs(fields.vurl()),
+                          qs(fields.vtext()));
+                },
+                [&](const MTPDkeyboardButtonWebView &fields) {
+                  AddLink(links, u"inline_webview_button"_q, qs(fields.vurl()),
+                          qs(fields.vtext()));
+                },
+                [&](const MTPDkeyboardButtonSimpleWebView &fields) {
+                  AddLink(links, u"inline_webview_button"_q, qs(fields.vurl()),
+                          qs(fields.vtext()));
+                },
+                [&](const auto &) {});
+          }
+        }
+      },
+      [&](const auto &) {});
+}
+
+void AppendWebPageLinks(std::vector<Link> &links, const MTPMessageMedia &media) {
+  media.match(
+      [&](const MTPDmessageMediaWebPage &data) {
+        data.vwebpage().match(
+            [&](const MTPDwebPage &page) {
+              AddLink(links, u"webpage"_q, qs(page.vurl()),
+                      qs(page.vtitle().value_or_empty()));
+            },
+            [&](const MTPDwebPageEmpty &page) {
+              if (const auto url = page.vurl()) {
+                AddLink(links, u"webpage"_q, qs(*url));
+              }
+            },
+            [&](const MTPDwebPagePending &page) {
+              if (const auto url = page.vurl()) {
+                AddLink(links, u"webpage"_q, qs(*url));
+              }
+            },
+            [&](const auto &) {});
+      },
+      [&](const auto &) {});
+}
+
 void AppendPosts(const Config &config, std::vector<Post> posts) {
   std::ranges::sort(posts, {}, [](const Post &post) {
     return std::pair(post.postedAt, post.messageId);
@@ -265,12 +366,26 @@ void AppendPosts(const Config &config, std::vector<Post> posts) {
     signature +=
         QCryptographicHash::hash(post.text.toUtf8(), QCryptographicHash::Sha256)
             .toHex();
+    auto links = QJsonArray();
+    for (const auto &link : post.links) {
+      links.push_back(QJsonObject{
+          {u"kind"_q, link.kind},
+          {u"url"_q, link.url},
+          {u"text"_q, link.text.isEmpty() ? QJsonValue(QJsonValue::Null)
+                                          : QJsonValue(link.text)},
+      });
+    }
+    signature += ':';
+    signature +=
+        QCryptographicHash::hash(QJsonDocument(links).toJson(QJsonDocument::Compact),
+                                 QCryptographicHash::Sha256)
+            .toHex();
     const auto key = signature.toStdString();
     if (!SeenPosts.emplace(key).second) {
       continue;
     }
     auto record = QJsonObject{
-        {u"schema_version"_q, 1},
+        {u"schema_version"_q, 2},
         {u"channel_id"_q, static_cast<qint64>(post.channelId)},
         {u"channel_username"_q, post.channelUsername},
         {u"channel_title"_q, post.channelTitle},
@@ -279,6 +394,7 @@ void AppendPosts(const Config &config, std::vector<Post> posts) {
          QDateTime::fromSecsSinceEpoch(post.postedAt, QTimeZone::UTC)
              .toString(Qt::ISODate)},
         {u"text"_q, post.text},
+        {u"links"_q, links},
         {u"source_url"_q, u"https://t.me/"_q + post.channelUsername + u"/"_q +
                               QString::number(post.messageId)},
     };
@@ -326,6 +442,14 @@ void AppendPosts(const Config &config, std::vector<Post> posts) {
           if constexpr (MTPDmessage::Is<Message>()) {
             const auto text = qs(fields.vmessage());
             if (!text.trimmed().isEmpty()) {
+              auto links = std::vector<Link>();
+              AppendEntityLinks(links, text, fields.ventities().value_or_empty());
+              if (const auto markup = fields.vreply_markup()) {
+                AppendButtonLinks(links, *markup);
+              }
+              if (const auto media = fields.vmedia()) {
+                AppendWebPageLinks(links, *media);
+              }
               posts.push_back(Post{
                   .channelId = channel.id,
                   .channelUsername = channel.username,
@@ -336,6 +460,7 @@ void AppendPosts(const Config &config, std::vector<Post> posts) {
                                   ? std::optional(fields.vedit_date()->v)
                                   : std::nullopt,
                   .text = text,
+                  .links = std::move(links),
               });
             }
           }

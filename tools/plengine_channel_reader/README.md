@@ -30,11 +30,12 @@ The path can be overridden with `AYUGRAM_CHANNEL_READER_CONFIG`.
 The status file is written next to the default output as
 `channel-reader-status.json`. Output and status files are owner-only.
 
-Each JSONL record uses schema version 1:
+Each JSONL record uses schema version 2. `links` preserves visible URL
+entities, hidden text URLs, inline URL buttons, and web-page preview URLs:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "channel_id": 123,
   "channel_username": "example",
   "channel_title": "Example",
@@ -42,6 +43,13 @@ Each JSONL record uses schema version 1:
   "posted_at": "2026-07-28T12:00:00Z",
   "edited_at": null,
   "text": "Original post text",
+  "links": [
+    {
+      "kind": "inline_button",
+      "url": "https://example.com/apply/42",
+      "text": "Apply"
+    }
+  ],
   "source_url": "https://t.me/example/42"
 }
 ```

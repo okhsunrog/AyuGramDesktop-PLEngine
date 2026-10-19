@@ -19,6 +19,7 @@
 #include "history/history_item.h"
 #include "history/history_item_components.h"
 #include "unicode/regex.h"
+#include <ExternSharedVariables.h>
 
 #include <memory>
 #include <unordered_set>
@@ -150,6 +151,14 @@ bool isBlocked(const not_null<PeerData*> peer) {
 }
 
 bool filtered(const not_null<HistoryItem*> item) {
+	for (const auto function : FilterFunctions()) {
+		const auto result = function(item);
+		if (result == FilteredState::Filtered) {
+			return true;
+		} else if (result == FilteredState::RejectFurtherFiltering) {
+			return false;
+		}
+	}
 	if (showingFilteredMessages.contains(item->history()->peer->id.value)) {
 		return false;
 	}

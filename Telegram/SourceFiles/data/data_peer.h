@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
+#include "plengine/platform_compat.h"
 
 #include "data/notify/data_peer_notify_settings.h"
 #include "data/data_types.h"
@@ -261,33 +262,33 @@ public:
 	void setEmojiStatus(EmojiStatusId emojiStatusId, TimeId until = 0);
 	[[nodiscard]] EmojiStatusId emojiStatusId() const;
 
-	[[nodiscard]] bool isUser() const {
+	__declspec(dllexport) [[nodiscard]] bool isUser() const {
 		return peerIsUser(id);
 	}
-	[[nodiscard]] bool isChat() const {
+	__declspec(dllexport) [[nodiscard]] bool isChat() const {
 		return peerIsChat(id);
 	}
-	[[nodiscard]] bool isChannel() const {
+	__declspec(dllexport) [[nodiscard]] bool isChannel() const {
 		return peerIsChannel(id);
 	}
-	[[nodiscard]] bool isBot() const;
-	[[nodiscard]] bool isSelf() const;
-	[[nodiscard]] bool isVerified() const;
-	[[nodiscard]] bool isPremium() const;
-	[[nodiscard]] bool isScam() const;
-	[[nodiscard]] bool isFake() const;
-	[[nodiscard]] bool isMegagroup() const;
-	[[nodiscard]] bool isBroadcast() const;
-	[[nodiscard]] bool isForum() const;
-	[[nodiscard]] bool isMonoforum() const;
-	[[nodiscard]] bool isGigagroup() const;
-	[[nodiscard]] bool isRepliesChat() const;
-	[[nodiscard]] bool isVerifyCodes() const;
-	[[nodiscard]] bool isFreezeAppealChat() const;
-	[[nodiscard]] bool sharedMediaInfo() const;
-	[[nodiscard]] bool savedSublistsInfo() const;
-	[[nodiscard]] bool hasStoriesHidden() const;
-	void setStoriesHidden(bool hidden);
+	__declspec(dllexport) [[nodiscard]] bool isBot() const;
+	__declspec(dllexport) [[nodiscard]] bool isSelf() const;
+	__declspec(dllexport) [[nodiscard]] bool isVerified() const;
+	__declspec(dllexport) [[nodiscard]] bool isPremium() const;
+	__declspec(dllexport) [[nodiscard]] bool isScam() const;
+	__declspec(dllexport) [[nodiscard]] bool isFake() const;
+	__declspec(dllexport) [[nodiscard]] bool isMegagroup() const;
+	__declspec(dllexport) [[nodiscard]] bool isBroadcast() const;
+	__declspec(dllexport) [[nodiscard]] bool isForum() const;
+	__declspec(dllexport) [[nodiscard]] bool isMonoforum() const;
+	__declspec(dllexport) [[nodiscard]] bool isGigagroup() const;
+	__declspec(dllexport) [[nodiscard]] bool isRepliesChat() const;
+	__declspec(dllexport) [[nodiscard]] bool isVerifyCodes() const;
+	__declspec(dllexport) [[nodiscard]] bool isFreezeAppealChat() const;
+	__declspec(dllexport) [[nodiscard]] bool sharedMediaInfo() const;
+	__declspec(dllexport) [[nodiscard]] bool savedSublistsInfo() const;
+	__declspec(dllexport) [[nodiscard]] bool hasStoriesHidden() const;
+	__declspec(dllexport) void setStoriesHidden(bool hidden);
 
 	[[nodiscard]] Ui::BotVerifyDetails *botVerifyDetails() const;
 
@@ -322,9 +323,9 @@ public:
 		return _notify;
 	}
 
-	[[nodiscard]] bool isAyuNoForwards() const;
-	[[nodiscard]] bool allowsForwarding() const;
-	[[nodiscard]] Data::RestrictionCheckResult amRestricted(
+	__declspec(dllexport) [[nodiscard]] bool isAyuNoForwards() const;
+	__declspec(dllexport) [[nodiscard]] bool allowsForwarding() const;
+	__declspec(dllexport) [[nodiscard]] Data::RestrictionCheckResult amRestricted(
 		ChatRestriction right) const;
 	[[nodiscard]] bool amAnonymous() const;
 	[[nodiscard]] bool canRevokeFullHistory() const;
@@ -380,20 +381,20 @@ public:
 		return (_lastFullUpdate != 0);
 	}
 
-	[[nodiscard]] int nameVersion() const;
-	[[nodiscard]] const QString &name() const;
-	[[nodiscard]] const QString &shortName() const;
-	[[nodiscard]] const QString &topBarNameText() const;
+	__declspec(dllexport) [[nodiscard]] int nameVersion() const;
+	__declspec(dllexport) [[nodiscard]] const QString &name() const;
+	__declspec(dllexport) [[nodiscard]] const QString &shortName() const;
+	__declspec(dllexport) [[nodiscard]] const QString &topBarNameText() const;
 
-	[[nodiscard]] QString username() const;
-	[[nodiscard]] QString editableUsername() const;
-	[[nodiscard]] const std::vector<QString> &usernames() const;
-	[[nodiscard]] bool isUsernameEditable(QString username) const;
+	__declspec(dllexport) [[nodiscard]] QString username() const;
+	__declspec(dllexport) [[nodiscard]] QString editableUsername() const;
+	__declspec(dllexport) [[nodiscard]] const std::vector<QString> &usernames() const;
+	__declspec(dllexport) [[nodiscard]] bool isUsernameEditable(QString username) const;
 
-	[[nodiscard]] const base::flat_set<QString> &nameWords() const {
+	__declspec(dllexport) [[nodiscard]] const base::flat_set<QString> &nameWords() const {
 		return _nameWords;
 	}
-	[[nodiscard]] const base::flat_set<QChar> &nameFirstLetters() const {
+	__declspec(dllexport) [[nodiscard]] const base::flat_set<QChar> &nameFirstLetters() const {
 		return _nameFirstLetters;
 	}
 
@@ -452,11 +453,11 @@ public:
 	[[nodiscard]] ImageLocation userpicLocation() const;
 
 	static constexpr auto kUnknownPhotoId = PhotoId(0xFFFFFFFFFFFFFFFFULL);
-	[[nodiscard]] bool userpicPhotoUnknown() const;
-	[[nodiscard]] PhotoId userpicPhotoId() const;
-	[[nodiscard]] bool userpicHasVideo() const;
-	[[nodiscard]] Data::FileOrigin userpicOrigin() const;
-	[[nodiscard]] Data::FileOrigin userpicPhotoOrigin() const;
+	__declspec(dllexport) [[nodiscard]] bool userpicPhotoUnknown() const;
+	__declspec(dllexport) [[nodiscard]] PhotoId userpicPhotoId() const;
+	__declspec(dllexport) [[nodiscard]] bool userpicHasVideo() const;
+	__declspec(dllexport) [[nodiscard]] Data::FileOrigin userpicOrigin() const;
+	__declspec(dllexport) [[nodiscard]] Data::FileOrigin userpicPhotoOrigin() const;
 
 	// If this string is not empty we must not allow to open the
 	// conversation and we must show this string instead.
@@ -490,8 +491,8 @@ public:
 	[[nodiscard]] bool autoTranslation() const;
 
 	// Returns true if about text was changed.
-	bool setAbout(const QString &newAbout);
-	[[nodiscard]] const QString &about() const {
+	__declspec(dllexport) bool setAbout(const QString &newAbout);
+	__declspec(dllexport) [[nodiscard]] const QString &about() const {
 		return _about;
 	}
 
@@ -508,19 +509,19 @@ public:
 			? _barSettings.changes()
 			: (_barSettings.value() | rpl::type_erased);
 	}
-	[[nodiscard]] int paysPerMessage() const;
-	void clearPaysPerMessage();
-	[[nodiscard]] bool hideLinks() const;
-	[[nodiscard]] QString requestChatTitle() const;
-	[[nodiscard]] TimeId requestChatDate() const;
-	[[nodiscard]] UserData *businessBot() const;
-	[[nodiscard]] QString businessBotManageUrl() const;
-	void clearBusinessBot();
-	[[nodiscard]] QString phoneCountryCode() const;
-	[[nodiscard]] int registrationMonth() const;
-	[[nodiscard]] int registrationYear() const;
-	[[nodiscard]] TimeId nameChangeDate() const;
-	[[nodiscard]] TimeId photoChangeDate() const;
+	__declspec(dllexport) [[nodiscard]] int paysPerMessage() const;
+	__declspec(dllexport) void clearPaysPerMessage();
+	__declspec(dllexport) [[nodiscard]] bool hideLinks() const;
+	__declspec(dllexport) [[nodiscard]] QString requestChatTitle() const;
+	__declspec(dllexport) [[nodiscard]] TimeId requestChatDate() const;
+	__declspec(dllexport) [[nodiscard]] UserData *businessBot() const;
+	__declspec(dllexport) [[nodiscard]] QString businessBotManageUrl() const;
+	__declspec(dllexport) void clearBusinessBot();
+	__declspec(dllexport) [[nodiscard]] QString phoneCountryCode() const;
+	__declspec(dllexport) [[nodiscard]] int registrationMonth() const;
+	__declspec(dllexport) [[nodiscard]] int registrationYear() const;
+	__declspec(dllexport) [[nodiscard]] TimeId nameChangeDate() const;
+	__declspec(dllexport) [[nodiscard]] TimeId photoChangeDate() const;
 
 	enum class TranslationFlag : uchar {
 		Unknown,
@@ -544,10 +545,10 @@ public:
 		Blocked,
 		NotBlocked,
 	};
-	[[nodiscard]] BlockStatus blockStatus() const {
+	__declspec(dllexport) [[nodiscard]] BlockStatus blockStatus() const {
 		return _blockStatus;
 	}
-	[[nodiscard]] bool isBlocked() const {
+	__declspec(dllexport) [[nodiscard]] bool isBlocked() const {
 		return (blockStatus() == BlockStatus::Blocked);
 	}
 	void setIsBlocked(bool is);
@@ -558,7 +559,7 @@ public:
 		Normal,
 		Full,
 	};
-	[[nodiscard]] LoadedStatus loadedStatus() const {
+	__declspec(dllexport) [[nodiscard]] LoadedStatus loadedStatus() const {
 		return _loadedStatus;
 	}
 	[[nodiscard]] bool isMinimalLoaded() const {
@@ -572,14 +573,14 @@ public:
 	}
 	void setLoadedStatus(LoadedStatus status);
 
-	[[nodiscard]] TimeId messagesTTL() const;
-	void setMessagesTTL(TimeId period);
+	__declspec(dllexport) [[nodiscard]] TimeId messagesTTL() const;
+	__declspec(dllexport) void setMessagesTTL(TimeId period);
 
 	[[nodiscard]] Data::GroupCall *groupCall() const;
 	[[nodiscard]] PeerId groupCallDefaultJoinAs() const;
 
-	void setThemeToken(const QString &token);
-	[[nodiscard]] const QString &themeToken() const;
+	__declspec(dllexport) void setThemeToken(const QString &token);
+	__declspec(dllexport) [[nodiscard]] const QString &themeToken() const;
 
 	void setWallPaper(
 		std::optional<Data::WallPaper> paper,
@@ -594,12 +595,12 @@ public:
 		HasUnread,
 		HasVideoStream,
 	};
-	[[nodiscard]] bool hasActiveStories() const;
-	[[nodiscard]] bool hasUnreadStories() const;
-	[[nodiscard]] bool hasActiveVideoStream() const;
-	void setStoriesState(StoriesState state);
+	__declspec(dllexport) [[nodiscard]] bool hasActiveStories() const;
+	__declspec(dllexport) [[nodiscard]] bool hasUnreadStories() const;
+	__declspec(dllexport) [[nodiscard]] bool hasActiveVideoStream() const;
+	__declspec(dllexport) void setStoriesState(StoriesState state);
 
-	[[nodiscard]] int peerGiftsCount() const;
+	__declspec(dllexport) [[nodiscard]] int peerGiftsCount() const;
 
 	void setMainProfileTab(Data::ProfileTab tab);
 	[[nodiscard]] Data::ProfileTab mainProfileTab() const;

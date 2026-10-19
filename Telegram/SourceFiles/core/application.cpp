@@ -39,6 +39,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/platform/base_platform_info.h"
 #include "platform/platform_specific.h"
 #include "platform/platform_integration.h"
+#include "plengine/PLEMains.h"
 #include "history/history.h"
 #include "apiwrap.h"
 #include "api/api_updates.h"
@@ -262,6 +263,7 @@ void Application::closeAdditionalWindows() {
 }
 
 Application::~Application() {
+	StopEngine();
 	if (_savedWindows) {
 		_savedWindows->writeNow();
 	}
@@ -480,6 +482,7 @@ void Application::run() {
 	}
 
 	processCreatedWindow(_lastActivePrimaryWindow);
+	MainInject();
 
 	_savedWindows->startRestore();
 

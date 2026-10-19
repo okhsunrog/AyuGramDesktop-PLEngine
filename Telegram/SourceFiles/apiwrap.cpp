@@ -113,7 +113,9 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/ayu_worker.h"
 #include "ayu/utils/telegram_helpers.h"
 #include "ayu/features/forward/ayu_forward.h"
+#include "ExternSharedVariables.h"
 
+#include <cstring>
 
 namespace {
 
@@ -4759,6 +4761,18 @@ void ApiWrap::sendRichMessage(
 void ApiWrap::sendMessage(
 		MessageToSend &&message,
 		std::optional<MsgId> localMessageId) {
+	auto preparedText = message.textWithTags.text.toStdString();
+	for (const auto function : LegacyPrepareFunctions()) {
+		preparedText = PLEngine::PrepareLegacyMessage(preparedText, function);
+	}
+	for (const auto function : PrepareFunctions()) {
+		preparedText = PLEngine::PrepareMessage(preparedText, function);
+	}
+	if (const auto text = QString::fromStdString(preparedText)
+		; text != message.textWithTags.text) {
+		message.textWithTags.text = text;
+		message.textWithTags.tags.clear();
+	}
 	applyGhostScheduling(message.action, message.textWithTags.text);
 	const auto clearReplyTo = prependPseudoReply(message);
 

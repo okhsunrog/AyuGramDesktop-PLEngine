@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
+#include "plengine/platform_compat.h"
 
 #include "data/data_drafts.h"
 
@@ -54,7 +55,7 @@ enum class SendType {
 };
 
 struct SendAction {
-	explicit SendAction(
+	__declspec(dllexport) explicit SendAction(
 		not_null<Data::Thread*> thread,
 		SendOptions options = SendOptions());
 

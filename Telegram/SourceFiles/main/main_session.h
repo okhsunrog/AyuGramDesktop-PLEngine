@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
+#include "plengine/platform_compat.h"
 
 #include <rpl/filter.h>
 #include <rpl/variable.h>
@@ -105,7 +106,8 @@ struct FreezeInfo {
 		const FreezeInfo &) = default;
 };
 
-class Session final : public base::has_weak_ptr {
+class __declspec(dllexport) Session final : public base::has_weak_ptr
+{
 public:
 	Session(
 		not_null<Account*> account,

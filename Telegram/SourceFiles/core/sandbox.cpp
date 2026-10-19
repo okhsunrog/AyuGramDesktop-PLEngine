@@ -846,7 +846,8 @@ uint64 Sandbox::execExternal(const QString &cmd) {
 			return Platform::ActivationWindowId(window);
 		}
 	} else if (cmd == "quit") {
-		Quit();
+		// Closing the application can remove the client currently being read.
+		crl::on_main(this, [] { Quit(); });
 	}
 	return 0;
 }

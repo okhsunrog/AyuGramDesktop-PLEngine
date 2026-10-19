@@ -108,6 +108,27 @@ PRIVATE
 )
 
 set(ayugram_files
+        MainQueue.cpp
+        MainQueue.h
+        AyuPlugin.h
+        ExternSharedVariables.h
+        plengine/PLEMains.cpp
+        plengine/PLEMains.h
+        plengine/PLESettings.cpp
+        plengine/PLESettings.h
+        plengine/platform_compat.h
+        plengine/plugin_api.h
+        plengine/message_hooks.h
+        plengine/helpers/PseudoPopup.cpp
+        plengine/helpers/PseudoPopup.h
+        plengine/settings/settings_engine.cpp
+        plengine/settings/settings_engine.h
+        plengine/settings/settings_main.cpp
+        plengine/settings/settings_main.h
+        plengine/settings/settings_plugins.cpp
+        plengine/settings/settings_plugins.h
+        plengine/settings/settings_trustedUA.cpp
+        plengine/settings/settings_trustedUA.h
         ayu/ayu_worker.cpp
         ayu/ayu_worker.h
         ayu/ayu_url_handlers.cpp
@@ -2796,6 +2817,10 @@ elseif (build_winstore)
     set_target_properties(StartupTask PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${output_folder}
     )
+endif()
+
+if (LINUX)
+    target_link_options(Telegram PRIVATE "-Wl,--export-dynamic")
 endif()
 
 if (LINUX AND DESKTOP_APP_USE_PACKAGED)

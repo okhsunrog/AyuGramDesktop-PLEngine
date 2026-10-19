@@ -5,6 +5,7 @@
 //
 // Copyright @Radolyn, 2026
 #pragma once
+#include "plengine/platform_compat.h"
 
 #include "ayu/ayu_settings.h"
 #include "ayu/ui/settings/settings_ayu_utils.h"
@@ -13,7 +14,7 @@
 
 namespace Settings::AyuBuilder {
 
-class AyuSectionBuilder {
+__declspec(dllexport) class AyuSectionBuilder {
 public:
 	explicit AyuSectionBuilder(Builder::SectionBuilder &builder);
 

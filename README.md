@@ -1,3 +1,7 @@
+> This fork's Linux PLEngine work is on `linux-plengine-7.2`. See
+> [Linux port and Nix packaging](README-pluginEngine.md#linux-fork-and-reproducible-nix-builds)
+> for the supported plugin hooks, package outputs and build commands.
+
 # AyuGram
 
 ![AyuGram Logo](.github/AyuGram.png) ![AyuChan](.github/AyuChan.png)

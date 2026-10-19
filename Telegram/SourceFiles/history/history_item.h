@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
+#include "plengine/platform_compat.h"
 
 #include "base/runtime_composer.h"
 #include "data/data_media_types.h"
@@ -118,7 +119,8 @@ enum class PaidPostType : uchar {
 	Ton,
 };
 
-class HistoryItem final : public RuntimeComposer<HistoryItem> {
+class __declspec(dllexport) HistoryItem final : public RuntimeComposer<HistoryItem>
+{
 public:
 	[[nodiscard]] static std::unique_ptr<Data::Media> CreateMedia(
 		not_null<HistoryItem*> item,
@@ -485,8 +487,9 @@ public:
 	[[nodiscard]] bool hasHiddenLinks() const;
 
 	[[nodiscard]] bool emptyText() const {
-		return _text.empty();
-	}
+		return _text.empty(); }
+	[[nodiscard]] TextWithEntities getText() const { return _text; }
+
 
 	[[nodiscard]] bool canPin() const;
 	[[nodiscard]] bool canBeEdited() const;

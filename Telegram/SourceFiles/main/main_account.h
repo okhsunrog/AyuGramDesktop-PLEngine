@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
+#include "plengine/platform_compat.h"
 
 #include "mtproto/mtproto_auth_key.h"
 #include "mtproto/mtp_instance.h"
@@ -29,7 +30,8 @@ class Session;
 class SessionSettings;
 class AppConfig;
 
-class Account final : public base::has_weak_ptr {
+class __declspec(dllexport) Account final : public base::has_weak_ptr
+{
 public:
 	Account(not_null<Domain*> domain, const QString &dataName, int index);
 	~Account();

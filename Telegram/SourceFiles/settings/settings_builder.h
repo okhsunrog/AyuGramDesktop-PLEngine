@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
+#include "plengine/platform_compat.h"
 
 #include "api/api_user_privacy.h"
 #include "base/object_ptr.h"
@@ -116,7 +117,7 @@ private:
 };
 
 
-class BuildHelper {
+__declspec(dllexport) class BuildHelper {
 public:
 	BuildHelper(SectionMeta &&meta, FnMut<void(SectionBuilder&)> method);
 
@@ -147,14 +148,14 @@ struct SearchContext {
 
 using BuildContext = std::variant<WidgetContext, SearchContext>;
 
-class SectionBuilder {
+__declspec(dllexport) class SectionBuilder {
 public:
 	explicit SectionBuilder(BuildContext context);
 
 	void add(FnMut<void(const BuildContext &ctx)> method);
 
 	using ToggledScopePtr = not_null<Ui::SlideWrap<Ui::VerticalLayout>*>;
-	Ui::VerticalLayout *scope(
+	__declspec(dllexport) Ui::VerticalLayout *scope(
 		FnMut<void()> method,
 		rpl::producer<bool> shown = nullptr,
 		FnMut<void(ToggledScopePtr)> hook = nullptr);
@@ -169,7 +170,7 @@ public:
 			return widget != nullptr;
 		}
 	};
-	Ui::RpWidget *add(
+	__declspec(dllexport) Ui::RpWidget *add(
 		FnMut<WidgetToAdd(const WidgetContext &ctx)> widget,
 		FnMut<SearchEntry()> search = nullptr);
 
@@ -187,7 +188,7 @@ public:
 		IconDescriptor searchIcon;
 		SearchEntryCheckIcon searchCheckIcon = SearchEntryCheckIcon::None;
 	};
-	Ui::RpWidget *addControl(ControlArgs &&args);
+	__declspec(dllexport) Ui::RpWidget *addControl(ControlArgs &&args);
 
 	struct ButtonArgs {
 		QString id;
@@ -203,7 +204,7 @@ public:
 		HighlightArgs highlight;
 		rpl::producer<bool> shown;
 	};
-	Ui::SettingsButton *addButton(ButtonArgs &&args);
+	__declspec(dllexport) Ui::SettingsButton *addButton(ButtonArgs &&args);
 
 	struct SectionArgs {
 		//QString id; // Sections should register themselves in search.
@@ -213,7 +214,7 @@ public:
 		IconDescriptor icon;
 		QStringList keywords;
 	};
-	Ui::SettingsButton *addSectionButton(SectionArgs &&args);
+	__declspec(dllexport) Ui::SettingsButton *addSectionButton(SectionArgs &&args);
 
 	struct PremiumButtonArgs {
 		QString id;
@@ -224,7 +225,7 @@ public:
 		Fn<void()> onClick;
 		QStringList keywords;
 	};
-	Ui::SettingsButton *addPremiumButton(PremiumButtonArgs &&args);
+	__declspec(dllexport) Ui::SettingsButton *addPremiumButton(PremiumButtonArgs &&args);
 
 	struct PrivacyButtonArgs {
 		QString id;
@@ -235,7 +236,7 @@ public:
 		bool premium = false;
 		QStringList keywords;
 	};
-	Ui::SettingsButton *addPrivacyButton(PrivacyButtonArgs &&args);
+	__declspec(dllexport) Ui::SettingsButton *addPrivacyButton(PrivacyButtonArgs &&args);
 
 	struct CheckboxArgs {
 		QString id;
@@ -246,7 +247,7 @@ public:
 		HighlightArgs highlight = { .radius = st::boxRadius };
 		rpl::producer<bool> shown;
 	};
-	Ui::Checkbox *addCheckbox(CheckboxArgs &&args);
+	__declspec(dllexport) Ui::Checkbox *addCheckbox(CheckboxArgs &&args);
 
 	struct SubsectionTitleArgs {
 		QString id;
@@ -254,18 +255,18 @@ public:
 		rpl::producer<QString> title;
 		QStringList keywords;
 	};
-	void addSubsectionTitle(SubsectionTitleArgs &&args);
-	void addSubsectionTitle(rpl::producer<QString> text);
-	void addDivider();
-	void addDividerText(rpl::producer<QString> text);
-	void addSkip();
-	void addSkip(int height);
+	__declspec(dllexport) void addSubsectionTitle(SubsectionTitleArgs &&args);
+	__declspec(dllexport) void addSubsectionTitle(rpl::producer<QString> text);
+	__declspec(dllexport) void addDivider();
+	__declspec(dllexport) void addDividerText(rpl::producer<QString> text);
+	__declspec(dllexport) void addSkip();
+	__declspec(dllexport) void addSkip(int height);
 
-	[[nodiscard]] Ui::VerticalLayout *container() const;
-	[[nodiscard]] Window::SessionController *controller() const;
-	[[nodiscard]] not_null<::Main::Session*> session() const;
-	[[nodiscard]] Fn<void(Type)> showOther() const;
-	[[nodiscard]] HighlightRegistry *highlights() const;
+	__declspec(dllexport) [[nodiscard]] Ui::VerticalLayout *container() const;
+	__declspec(dllexport) [[nodiscard]] Window::SessionController *controller() const;
+	__declspec(dllexport) [[nodiscard]] not_null<::Main::Session*> session() const;
+	__declspec(dllexport) [[nodiscard]] Fn<void(Type)> showOther() const;
+	__declspec(dllexport) [[nodiscard]] HighlightRegistry *highlights() const;
 
 private:
 	void registerHighlight(

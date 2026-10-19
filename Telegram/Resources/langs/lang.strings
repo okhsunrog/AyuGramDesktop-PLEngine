@@ -8777,6 +8777,11 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 
 // Keys finished
 
+// PLEngine keys
+"ayu_PLEngine" = "Plugin Engine";
+"ayu_PluginFolder" = "Plugin Folder";
+"ayu_PluginHooks" = "Hooks";
+"ayu_PluginFile" = "Filename";
 
 // AyuGram keys generated
 

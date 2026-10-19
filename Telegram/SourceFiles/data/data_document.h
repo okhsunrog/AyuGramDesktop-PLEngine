@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
+#include "plengine/platform_compat.h"
 
 #include "base/flags.h"
 #include "base/binary_guard.h"
@@ -109,7 +110,8 @@ namespace Serialize {
 class Document;
 } // namespace Serialize;
 
-class DocumentData final {
+class __declspec(dllexport) DocumentData final
+{
 public:
 	DocumentData(not_null<Data::Session*> owner, DocumentId id);
 	~DocumentData();

@@ -6,6 +6,7 @@ For license and copyright information please follow this link:
 https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #pragma once
+#include "plengine/platform_compat.h"
 
 #include "base/variant.h"
 #include "mtproto/mtproto_response.h"
@@ -206,6 +207,7 @@ public:
 		return *_instance;
 	}
 
+	__declspec(dllexport) Instance *instancePtr() const { return _instance; }
 	template <typename Request>
 	class SpecificRequestBuilder : public RequestBuilder {
 	private:

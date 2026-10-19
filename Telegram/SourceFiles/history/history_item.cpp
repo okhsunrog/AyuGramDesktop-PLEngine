@@ -89,6 +89,8 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ayu/utils/telegram_helpers.h"
 #include "ui/emoji_config.h"
 
+#include "ExternSharedVariables.h"
+
 
 namespace {
 
@@ -2891,8 +2893,12 @@ void HistoryItem::clearMediaAsExpired() {
 	}
 
 	unarmMediaDestroy();
+	const auto hooks = ExcludeDeletionFunctions();
+	const auto excluded = std::ranges::any_of(hooks, [=](auto function) {
+		return function(this);
+	});
 	const auto &settings = AyuSettings::getInstance();
-	if (settings.saveDeletedMessages()) {
+	if (settings.saveDeletedMessages() && !excluded) {
 		RemoveComponents(HistoryServiceSelfDestruct::Bit());
 		_history->owner().requestItemViewRefresh(this);
 		return;
@@ -4126,6 +4132,18 @@ void HistoryItem::setPostAuthor(const QString &postAuthor) {
 }
 
 void HistoryItem::setDeleted() {
+
+	/*
+	Emil Kh, AKA Pomorgite - t.me/Pomorgite // pmrgt.com
+	AyuGram Plugin engine, 2026 // t.me/ayuplugg
+	Follows GNU GPL v3 and Telegram Desktop licensing.
+	*/
+	for (const auto function : ExcludeDeletionFunctions()) {
+		if (function(this)) {
+			return;
+		}
+	}
+
 	_deleted = true;
 	_deletedAnimated = true;
 
